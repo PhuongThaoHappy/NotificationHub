@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notification Hub</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-title">
+        Notification Hub
+      </div>
+      <div class="section-title">Ứng dụng kết nối</div>
+      <div class="app-list" id="appList"></div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- HEADER -->
+      <div class="header">
+        <h1>Thông báo tổng hợp</h1>
+        <p>Theo dõi tất cả thông báo từ các nền tảng của bạn trong một nơi duy nhất.</p>
+      </div>
+
+      <!-- FILTER CONTROLS -->
+      <div class="controls-container">
+        <!-- STATUS FILTER -->
+        <div class="filter-group">
+          <button class="filter-btn active" data-status="all">Tất cả</button>
+          <button class="filter-btn" data-status="unread">Chưa đọc</button>
+        </div>
+
+        <!-- APP FILTER -->
+        <div class="app-filter-group" id="appFilters"></div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="notificationsContainer"></div>
+    </main>
+  </div>
+
+  <!-- CUSTOM MODAL POP-UP (XÁC NHẬN XÓA) -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Xác nhận xóa</h3>
+      </div>
+      <div class="modal-body">
+        Bạn có chắc chắn muốn xóa thông báo này không? Hành động này không thể hoàn tác.
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn btn-cancel" id="btnCancelDelete">Hủy</button>
+        <button class="modal-btn btn-confirm" id="btnConfirmDelete">Xóa ngay</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
