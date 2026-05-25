@@ -17,6 +17,10 @@ const { formatDate } = require('../utils/timestampFormatter');
 const supportedPlatforms = new Set(['outlook', 'slack', 'teams', 'discord', 'zalo']);
 
 function buildNotificationFromRow(row) {
+  const rowTimestamp = row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+    ? row.created_at
+    : new Date();
+
   return normalizeNotification({
     id: row.id,
     platform: row.platform,
@@ -28,9 +32,10 @@ function buildNotificationFromRow(row) {
     message: row.message,
     text: row.message,
     bodyPreview: row.message,
-    receivedDateTime: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
-      ? row.created_at
-      : new Date(),
+    timestamp: rowTimestamp,
+    createdDateTime: rowTimestamp,
+    receivedDateTime: rowTimestamp,
+    createdAt: rowTimestamp,
     read: Boolean(row.is_read)
   }, row.platform);
 }
