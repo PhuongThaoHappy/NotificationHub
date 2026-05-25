@@ -11,6 +11,10 @@ const slackUserCache = new Map();
 const SLACK_USER_CACHE_TTL = Number(process.env.SLACK_USER_CACHE_TTL_MS || 1000 * 60 * 15); // default 15m
 const SLACK_USER_CACHE_MAX = Number(process.env.SLACK_USER_CACHE_MAX || 2000);
 
+// Cache for bot user id (from auth.test) per team or token
+const slackBotIdCache = new Map();
+const SLACK_BOT_ID_CACHE_TTL = Number(process.env.SLACK_BOT_ID_CACHE_TTL_MS || 1000 * 60 * 15);
+
 async function upsertSlackTokenRecord({ teamId = null, accessToken, scope = null, refreshToken = null, expiresAt = null }) {
   if (!accessToken) {
     return false;
@@ -161,6 +165,33 @@ async function resolveSlackSenderName(event, teamId) {
   }
 }
 
+async function getSlackBotUserId(teamId) {
+  // Try cache
+  try {
+    const cached = slackBotIdCache.get(teamId || '__default');
+    if (cached && cached.expiresAt > Date.now()) return cached.id;
+  } catch (err) {}
+
+  const accessToken = await getSlackAccessToken(teamId);
+  if (!accessToken) return null;
+
+  try {
+    const resp = await axios.get('https://slack.com/api/auth.test', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const data = resp.data;
+    if (data?.ok && data.user_id) {
+      const id = data.user_id;
+      slackBotIdCache.set(teamId || '__default', { id, expiresAt: Date.now() + SLACK_BOT_ID_CACHE_TTL });
+      return id;
+    }
+  } catch (err) {
+    console.warn('Could not fetch Slack bot user id via auth.test:', err?.message || err);
+  }
+
+  return null;
+}
+
 function shouldIgnoreSlackEvent(event) {
   if (!event || typeof event !== 'object') {
     return true;
@@ -251,12 +282,21 @@ router.post('/events', (req, res, next) => {
       const event = body.event;
 
       if (shouldIgnoreSlackEvent(event)) {
-        console.log('Ignoring Slack system event:', {
-          type: event.type,
-          subtype: event.subtype,
-          channel: event.channel,
-          user: event.user
-        });
+        if (process.env.DEBUG_SLACK === 'true') console.log('Ignoring Slack system event:', { type: event.type, subtype: event.subtype, channel: event.channel, user: event.user });
+        return res.status(200).json({ ok: true, ignored: true });
+      }
+
+      // Ignore events originating from the bot itself or any configured ignored user ids
+      const botUserId = await getSlackBotUserId(body.team_id).catch(() => null);
+      const ignoredEnv = (process.env.SLACK_IGNORED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+      if ((event.user && botUserId && event.user === botUserId) || event.bot_id) {
+        if (process.env.DEBUG_SLACK === 'true') console.log('Ignoring Slack event from bot/self', { user: event.user, bot_id: event.bot_id, botUserId });
+        return res.status(200).json({ ok: true, ignored: true });
+      }
+
+      if (event.user && ignoredEnv.includes(event.user)) {
+        if (process.env.DEBUG_SLACK === 'true') console.log('Ignoring Slack event from configured ignored user id', { user: event.user });
         return res.status(200).json({ ok: true, ignored: true });
       }
 
