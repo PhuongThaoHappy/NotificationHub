@@ -14,6 +14,199 @@ const {
 } = require('../utils/responseFormatter');
 const { formatDate } = require('../utils/timestampFormatter');
 
+const supportedPlatforms = new Set(['outlook', 'slack', 'teams', 'discord', 'zalo']);
+
+function buildNotificationFromRow(row) {
+  return normalizeNotification({
+    id: row.id,
+    platform: row.platform,
+    sender: row.sender,
+    senderName: row.sender,
+    from: row.sender,
+    subject: row.subject,
+    channel: row.subject,
+    message: row.message,
+    text: row.message,
+    bodyPreview: row.message,
+    receivedDateTime: row.created_at && !Number.isNaN(new Date(row.created_at).getTime())
+      ? row.created_at
+      : new Date(),
+    read: Boolean(row.is_read)
+  }, row.platform);
+}
+
+function normalizeIncomingPayload(platform, payload) {
+  const basePayload = payload && typeof payload === 'object' ? payload : {};
+
+  switch (platform) {
+    case 'slack': {
+      const eventPayload = basePayload.event || basePayload;
+      return {
+        id: eventPayload.client_msg_id || eventPayload.ts || eventPayload.id,
+        user: eventPayload.user || eventPayload.bot_id || basePayload.user,
+        username: eventPayload.username || basePayload.username,
+        channel: eventPayload.channel_name || eventPayload.channel || basePayload.channel,
+        text: eventPayload.text || basePayload.text || basePayload.message,
+        ts: eventPayload.ts || basePayload.ts || basePayload.timestamp,
+        timestamp: eventPayload.ts || basePayload.ts || basePayload.timestamp,
+        read: eventPayload.read ?? basePayload.read ?? basePayload.is_read ?? false
+      };
+    }
+    case 'teams':
+      return {
+        id: basePayload.id,
+        from: basePayload.from || { displayName: basePayload.sender || basePayload.user },
+        subject: basePayload.subject || basePayload.channel || basePayload.conversationName,
+        body: basePayload.body || { content: basePayload.message || basePayload.text },
+        message: basePayload.message || basePayload.text,
+        createdDateTime: basePayload.createdDateTime || basePayload.timestamp || basePayload.created_at,
+        timestamp: basePayload.createdDateTime || basePayload.timestamp || basePayload.created_at,
+        read: basePayload.read ?? basePayload.isRead ?? false
+      };
+    case 'zalo':
+      return {
+        id: basePayload.id || basePayload.messageId || basePayload.msgId,
+        sender: basePayload.sender || basePayload.from,
+        senderName: basePayload.senderName || basePayload.userName,
+        subject: basePayload.subject || basePayload.conversationName || basePayload.threadName,
+        message: basePayload.message || basePayload.text || basePayload.content,
+        timestamp: basePayload.timestamp || basePayload.createdAt || basePayload.sentAt,
+        read: basePayload.read ?? basePayload.isRead ?? false
+      };
+    case 'discord':
+      return {
+        id: basePayload.id,
+        author: basePayload.author || { username: basePayload.username || basePayload.sender },
+        guild: basePayload.guild || { name: basePayload.channel || basePayload.subject },
+        content: basePayload.content || basePayload.message || basePayload.text,
+        timestamp: basePayload.timestamp || basePayload.createdAt,
+        read: basePayload.read ?? false
+      };
+    case 'outlook':
+      return {
+        id: basePayload.id,
+        from: basePayload.from || basePayload.sender,
+        subject: basePayload.subject,
+        bodyPreview: basePayload.bodyPreview || basePayload.message || basePayload.text,
+        receivedDateTime: basePayload.receivedDateTime || basePayload.timestamp || basePayload.createdAt,
+        isRead: basePayload.isRead ?? basePayload.read ?? false
+      };
+    default:
+      return {
+        id: basePayload.id,
+        sender: basePayload.sender || basePayload.from || basePayload.user || 'Unknown',
+        subject: basePayload.subject || basePayload.channel || platform,
+        message: basePayload.message || basePayload.text || basePayload.content,
+        timestamp: basePayload.timestamp || basePayload.createdAt || Date.now(),
+        read: basePayload.read ?? basePayload.isRead ?? false
+      };
+  }
+}
+
+async function ingestNotification(req, res) {
+  try {
+    const platform = (req.params.platform || req.body.platform || '').toLowerCase();
+    const payload = req.body?.data || req.body?.notification || req.body;
+
+    if (!platform) {
+      return res.status(400).json(formatErrorResponse('platform is required', 400));
+    }
+
+    if (!supportedPlatforms.has(platform)) {
+      return res.status(400).json(formatErrorResponse(`Unsupported platform: ${platform}`, 400));
+    }
+
+    const normalizedInput = normalizeIncomingPayload(platform, payload);
+    const notification = normalizeNotification(normalizedInput, platform);
+
+    if (!notification.sender || !notification.message) {
+      return res.status(400).json(formatErrorResponse('sender and message are required', 400));
+    }
+
+    const createdAt = notification.timestamp instanceof Date && !Number.isNaN(notification.timestamp.getTime())
+      ? notification.timestamp
+      : new Date();
+
+    const [result] = await pool.query(
+      'INSERT INTO notifications (platform, sender, subject, message, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        notification.platform,
+        notification.sender,
+        notification.subject || null,
+        notification.message,
+        createdAt,
+        Boolean(notification.read)
+      ]
+    );
+
+    const responsePayload = (() => {
+      switch (notification.platform) {
+        case 'slack':
+          return {
+            id: result.insertId,
+            user: notification.sender,
+            channel: notification.subject,
+            text: notification.message,
+            ts: Math.floor(createdAt.getTime() / 1000),
+            read: Boolean(notification.read)
+          };
+        case 'teams':
+          return {
+            id: result.insertId,
+            from: { displayName: notification.sender },
+            subject: notification.subject,
+            body: { content: notification.message },
+            createdDateTime: createdAt.toISOString(),
+            read: Boolean(notification.read)
+          };
+        case 'zalo':
+          return {
+            id: result.insertId,
+            sender: notification.sender,
+            subject: notification.subject,
+            message: notification.message,
+            timestamp: createdAt.toISOString(),
+            read: Boolean(notification.read)
+          };
+        case 'discord':
+          return {
+            id: result.insertId,
+            author: { username: notification.sender },
+            guild: { name: notification.subject },
+            content: notification.message,
+            timestamp: createdAt.toISOString(),
+            read: Boolean(notification.read)
+          };
+        case 'outlook':
+          return {
+            id: result.insertId,
+            from: notification.sender,
+            subject: notification.subject,
+            bodyPreview: notification.message,
+            receivedDateTime: createdAt.toISOString(),
+            isRead: Boolean(notification.read)
+          };
+        default:
+          return {
+            id: result.insertId,
+            sender: notification.sender,
+            subject: notification.subject,
+            message: notification.message,
+            timestamp: createdAt.toISOString(),
+            read: Boolean(notification.read)
+          };
+      }
+    })();
+
+    const responseNotification = normalizeNotification(responsePayload, notification.platform);
+
+    res.status(201).json(formatSuccessResponse([responseNotification], 'Notification received successfully'));
+  } catch (error) {
+    console.error('Error ingesting notification:', error);
+    res.status(500).json(formatErrorResponse(error, 500));
+  }
+}
+
 /**
  * Lấy danh sách thông báo với pagination
  */
@@ -55,15 +248,7 @@ async function getNotifications(req, res) {
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     const [rows] = await pool.query(query, [...values, limit, offset]);
 
-    const notifications = rows.map(row => normalizeNotification({
-      id: row.id,
-      platform: row.platform,
-      from: row.sender,
-      subject: row.subject,
-      bodyPreview: row.message,
-      receivedDateTime: row.created_at,
-      isRead: row.is_read
-    }, row.platform));
+    const notifications = rows.map(row => buildNotificationFromRow(row));
 
     res.json(formatPaginationResponse(notifications, page, limit, total));
   } catch (error) {
@@ -89,15 +274,7 @@ async function getNotificationById(req, res) {
     }
 
     const row = rows[0];
-    const notification = normalizeNotification({
-      id: row.id,
-      platform: row.platform,
-      from: row.sender,
-      subject: row.subject,
-      bodyPreview: row.message,
-      receivedDateTime: row.created_at,
-      isRead: row.is_read
-    }, row.platform);
+    const notification = buildNotificationFromRow(row);
 
     res.json(formatSuccessResponse([notification]));
   } catch (error) {
@@ -215,15 +392,7 @@ async function getNotificationsGroupedByDate(req, res) {
 
     const grouped = {};
     rows.forEach(row => {
-      const notification = normalizeNotification({
-        id: row.id,
-        platform: row.platform,
-        from: row.sender,
-        subject: row.subject,
-        bodyPreview: row.message,
-        receivedDateTime: row.created_at,
-        isRead: row.is_read
-      }, row.platform);
+      const notification = buildNotificationFromRow(row);
 
       const date = formatDate(notification.timestamp);
       if (!grouped[date]) grouped[date] = [];
@@ -303,6 +472,7 @@ async function findAndRemoveDuplicates(req, res) {
 }
 
 module.exports = {
+  ingestNotification,
   getNotifications,
   getNotificationById,
   updateReadStatus,

@@ -8,6 +8,11 @@ const platformConfig = {
     color: '#0078d4',
     type: 'email'
   },
+  zalo: {
+    icon: 'zalo-icon',
+    color: '#0068ff',
+    type: 'chat'
+  },
   slack: {
     icon: 'slack-icon',
     color: '#e01e5a',
@@ -48,13 +53,29 @@ function normalizeOutlookNotification(rawData) {
  * Chuẩn hóa thông báo từ Slack
  */
 function normalizeSlackNotification(rawData) {
+  const timestampValue = rawData.ts || rawData.timestamp;
+  const parsedTimestamp = (() => {
+    if (timestampValue === undefined || timestampValue === null || timestampValue === '') {
+      return null;
+    }
+
+    const numericTimestamp = Number.parseFloat(timestampValue);
+    if (Number.isNaN(numericTimestamp)) {
+      const dateFromValue = new Date(timestampValue);
+      return Number.isNaN(dateFromValue.getTime()) ? null : dateFromValue;
+    }
+
+    const dateFromSeconds = new Date(numericTimestamp < 1e12 ? numericTimestamp * 1000 : numericTimestamp);
+    return Number.isNaN(dateFromSeconds.getTime()) ? null : dateFromSeconds;
+  })();
+
   return {
     id: rawData.ts || rawData.id,
     platform: 'slack',
-    sender: rawData.user || rawData.username,
+    sender: rawData.senderName || rawData.displayName || rawData.username || rawData.user,
     subject: rawData.channel || 'Direct Message',
     message: rawData.text || rawData.message,
-    timestamp: new Date((rawData.ts || rawData.timestamp) * 1000),
+    timestamp: parsedTimestamp || new Date(),
     read: rawData.read || false,
     icon: platformConfig.slack.icon,
     color: platformConfig.slack.color,
@@ -78,6 +99,25 @@ function normalizeTeamsNotification(rawData) {
     icon: platformConfig.teams.icon,
     color: platformConfig.teams.color,
     type: platformConfig.teams.type,
+    originalData: rawData
+  };
+}
+
+/**
+ * Chuẩn hóa thông báo từ Zalo
+ */
+function normalizeZaloNotification(rawData) {
+  return {
+    id: rawData.id || rawData.messageId || rawData.msgId,
+    platform: 'zalo',
+    sender: rawData.sender?.name || rawData.sender || rawData.senderName || rawData.userName || rawData.from,
+    subject: rawData.subject || rawData.conversationName || rawData.threadName || 'Zalo',
+    message: rawData.message || rawData.text || rawData.content,
+    timestamp: new Date(rawData.timestamp || rawData.createdAt || rawData.sentAt || Date.now()),
+    read: rawData.read || rawData.isRead || false,
+    icon: platformConfig.zalo.icon,
+    color: platformConfig.zalo.color,
+    type: platformConfig.zalo.type,
     originalData: rawData
   };
 }
@@ -108,6 +148,8 @@ function normalizeNotification(rawData, platform) {
   switch(platform) {
     case 'outlook':
       return normalizeOutlookNotification(rawData);
+    case 'zalo':
+      return normalizeZaloNotification(rawData);
     case 'slack':
       return normalizeSlackNotification(rawData);
     case 'teams':
@@ -149,6 +191,7 @@ function removeRedundantData(notification) {
 module.exports = {
   normalizeNotification,
   normalizeOutlookNotification,
+  normalizeZaloNotification,
   normalizeSlackNotification,
   normalizeTeamsNotification,
   normalizeDiscordNotification,

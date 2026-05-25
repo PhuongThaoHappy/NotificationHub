@@ -10,6 +10,20 @@ const { removeRedundantData } = require('./dataNormalizer');
  */
 function formatNotification(notification) {
   const cleaned = removeRedundantData(notification);
+  const timestamp = (() => {
+    const value = cleaned.timestamp;
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? new Date().toISOString() : value.toISOString();
+    }
+
+    if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+    }
+
+    return new Date().toISOString();
+  })();
   
   return {
     id: cleaned.id,
@@ -17,12 +31,12 @@ function formatNotification(notification) {
     icon: cleaned.icon,
     color: cleaned.color,
     type: cleaned.type,
-    sender: cleaned.sender,
+    sender: cleaned.sender || cleaned.subject || cleaned.platform || 'Unknown',
     subject: cleaned.subject,
     message: cleaned.message,
-    timestamp: cleaned.timestamp,
-    timeAgo: formatTimeAgo(cleaned.timestamp),
-    date: formatDate(cleaned.timestamp),
+    timestamp,
+    timeAgo: formatTimeAgo(timestamp),
+    date: formatDate(timestamp),
     read: cleaned.read
   };
 }

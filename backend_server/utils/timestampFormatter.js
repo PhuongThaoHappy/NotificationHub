@@ -7,11 +7,28 @@ const vietnameseMonths = [
   'tháng 7', 'tháng 8', 'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12'
 ];
 
+function toValidDate(timestamp) {
+  if (timestamp instanceof Date) {
+    return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+  }
+
+  if (timestamp === undefined || timestamp === null || timestamp === '') {
+    return null;
+  }
+
+  const parsed = new Date(timestamp);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * Format timestamp dạng thân thiện: "5 phút trước", "Hôm qua lúc 16:20"
  */
 function formatTimeAgo(timestamp) {
-  const date = new Date(timestamp);
+  const date = toValidDate(timestamp);
+  if (!date) {
+    return 'Vừa xong';
+  }
+
   const now = new Date();
   const diffMs = now - date;
   const diffSeconds = Math.floor(diffMs / 1000);
@@ -46,7 +63,11 @@ function formatTimeAgo(timestamp) {
  * Format timestamp dạng ngày: "Hôm nay", "Hôm qua", "Tuần trước"
  */
 function formatDate(timestamp) {
-  const date = new Date(timestamp);
+  const date = toValidDate(timestamp);
+  if (!date) {
+    return 'Hôm nay';
+  }
+
   const now = new Date();
   const diffMs = now - date;
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -74,7 +95,7 @@ function formatDate(timestamp) {
  * Format timestamp dạng chuẩn ISO
  */
 function formatISO(timestamp) {
-  const date = new Date(timestamp);
+  const date = toValidDate(timestamp) || new Date();
   return date.toISOString();
 }
 
@@ -82,7 +103,7 @@ function formatISO(timestamp) {
  * Format timestamp dạng tùy chỉnh
  */
 function formatCustom(timestamp, format = 'DD/MM/YYYY HH:mm') {
-  const date = new Date(timestamp);
+  const date = toValidDate(timestamp) || new Date();
   
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');

@@ -10,11 +10,16 @@ const notificationController = require('../controllers/notificationController');
 router.get('/', notificationController.getNotifications);
 router.get('/stats', notificationController.getNotificationStats);
 router.get('/grouped', notificationController.getNotificationsGroupedByDate);
+
+// POST routes
+router.post('/ingest', notificationController.ingestNotification);
+router.post('/ingest/:platform', notificationController.ingestNotification);
+
 router.get('/:id', notificationController.getNotificationById);
 
 // PUT routes
-router.put('/:id/read', notificationController.updateReadStatus);
 router.put('/batch/read', notificationController.updateMultipleReadStatus);
+router.put('/:id/read', notificationController.updateReadStatus);
 
 // DELETE routes
 router.delete('/:id', notificationController.deleteNotification);

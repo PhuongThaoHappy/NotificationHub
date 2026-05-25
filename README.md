@@ -1,12 +1,13 @@
 # 📬 NotificationHub
 
-A comprehensive notification management system that aggregates notifications from multiple platforms (Outlook, Slack, Teams, Discord) into a unified interface with advanced features like duplicate detection, read status synchronization, and intelligent timestamp formatting.
+A comprehensive notification management system that aggregates notifications from multiple platforms (Outlook, Slack, Teams, Discord, Zalo) into a unified interface with advanced features like duplicate detection, read status synchronization, and intelligent timestamp formatting.
 
 ## ✨ Features
 
 ### Backend API
+
 - 📊 **Pagination & Filtering** - Configurable page size, platform filtering, read/unread status filtering
-- 🔄 **Data Normalization** - Unified format for notifications from 4 different platforms (Outlook, Slack, Teams, Discord)
+- 🔄 **Data Normalization** - Unified format for notifications from 5 different platforms (Outlook, Slack, Teams, Discord, Zalo)
 - 🕐 **Smart Timestamps** - Vietnamese-formatted relative times ("5 phút trước") and date grouping ("Hôm nay", "Hôm qua")
 - 🎯 **Duplicate Detection** - Levenshtein distance algorithm for intelligent duplicate identification
 - ✅ **Status Management** - Single and batch read/unread status updates
@@ -15,6 +16,7 @@ A comprehensive notification management system that aggregates notifications fro
 - 🚀 **Performance** - Connection pooling, efficient data compression, demo mode fallback
 
 ### Frontend UI
+
 - 🎨 Clean, responsive design
 - 📱 Mobile-friendly interface
 - 🔔 Real-time notification updates (mockup ready for API integration)
@@ -51,12 +53,14 @@ NotificationHub/
 ## 📋 Prerequisites
 
 ### System Requirements
+
 - **Node.js** v14 or higher
 - **npm** v6 or higher
 - **MySQL** 5.7+ (optional for production; demo mode available)
 - **Browser** with ES6 support (Modern Chrome, Firefox, Safari, Edge)
 
 ### Optional
+
 - **MySQL Workbench** - For database management
 - **Postman** - For API testing
 
@@ -81,6 +85,7 @@ npm install -g http-server
 ### 2️⃣ Configuration
 
 Create a `.env` file in `backend_server/`:
+
 ```env
 DB_HOST=localhost
 DB_USER=root
@@ -106,6 +111,7 @@ mysql -u root -p < backend_server/init.sql
 ### 4️⃣ Start the Servers
 
 **Terminal 1 - Backend (Port 5000):**
+
 ```bash
 cd backend_server
 npm start
@@ -113,6 +119,7 @@ npm start
 ```
 
 **Terminal 2 - Frontend (Port 8080):**
+
 ```bash
 npx http-server -p 8080
 # Or if installed globally: http-server -p 8080
@@ -130,18 +137,19 @@ All endpoints are documented in detail in [backend_server/README.md](./backend_s
 
 ### Core Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/notifications` | Get paginated notifications with filtering |
-| GET | `/api/notifications/stats` | Get notification statistics |
-| GET | `/api/notifications/grouped` | Get notifications grouped by date |
-| GET | `/api/notifications/:id` | Get single notification |
-| PUT | `/api/notifications/:id/read` | Update single notification status |
-| PUT | `/api/notifications/batch/read` | Batch update notification status |
-| DELETE | `/api/notifications/:id` | Delete notification |
-| POST | `/api/notifications/deduplicate` | Detect & remove duplicates |
-| GET | `/api/health` | Health check |
-| GET | `/api/info` | API information |
+| Method | Endpoint                              | Description                                    |
+| ------ | ------------------------------------- | ---------------------------------------------- |
+| GET    | `/api/notifications`                  | Get paginated notifications with filtering     |
+| GET    | `/api/notifications/stats`            | Get notification statistics                    |
+| GET    | `/api/notifications/grouped`          | Get notifications grouped by date              |
+| POST   | `/api/notifications/ingest/:platform` | Ingest notifications from an external platform |
+| GET    | `/api/notifications/:id`              | Get single notification                        |
+| PUT    | `/api/notifications/:id/read`         | Update single notification status              |
+| PUT    | `/api/notifications/batch/read`       | Batch update notification status               |
+| DELETE | `/api/notifications/:id`              | Delete notification                            |
+| POST   | `/api/notifications/deduplicate`      | Detect & remove duplicates                     |
+| GET    | `/api/health`                         | Health check                                   |
+| GET    | `/api/info`                           | API information                                |
 
 ## 🧪 Testing
 
@@ -170,6 +178,7 @@ curl -X POST http://localhost:5000/api/notifications/deduplicate
 ```
 
 ### Automated Testing with Postman
+
 - Import the Postman collection from [backend_server/README.md](./backend_server/README.md)
 - Run the full test suite
 
@@ -178,6 +187,7 @@ curl -X POST http://localhost:5000/api/notifications/deduplicate
 All API responses follow a consistent format:
 
 ### Success Response
+
 ```json
 {
   "success": true,
@@ -209,6 +219,7 @@ All API responses follow a consistent format:
 ```
 
 ### Error Response
+
 ```json
 {
   "success": false,
@@ -222,16 +233,18 @@ All API responses follow a consistent format:
 
 ## 🌐 Supported Platforms
 
-| Platform | Fields Mapped | Icon | Color |
-|----------|---------------|------|-------|
+| Platform    | Fields Mapped                       | Icon         | Color   |
+| ----------- | ----------------------------------- | ------------ | ------- |
 | **Outlook** | sender, subject, message, timestamp | outlook-icon | #0078D4 |
-| **Slack** | sender, channel, message, timestamp | slack-icon | #36C5F0 |
-| **Teams** | sender, subject, message, timestamp | teams-icon | #6264A7 |
+| **Slack**   | sender, channel, message, timestamp | slack-icon   | #36C5F0 |
+| **Teams**   | sender, subject, message, timestamp | teams-icon   | #6264A7 |
 | **Discord** | sender, subject, message, timestamp | discord-icon | #5865F2 |
+| **Zalo**    | sender, subject, message, timestamp | zalo-icon    | #0068FF |
 
 ## 🛠️ Technology Stack
 
 ### Backend
+
 - **Express.js** 4.18.2 - Web framework
 - **MySQL2** 3.6.5 - Database driver with connection pooling
 - **Body-parser** 1.20.2 - Request body parsing
@@ -240,6 +253,7 @@ All API responses follow a consistent format:
 - **Nodemon** 3.0.1 - Development auto-reload
 
 ### Frontend
+
 - **HTML5** - Markup
 - **CSS3** - Styling & animations
 - **Vanilla JavaScript** - No dependencies
@@ -253,6 +267,7 @@ All API responses follow a consistent format:
 ## 🐛 Troubleshooting
 
 ### Backend won't start
+
 ```bash
 # Check if port 5000 is already in use
 netstat -ano | findstr :5000
@@ -263,6 +278,7 @@ netstat -ano | findstr :5000
 ```
 
 ### Database connection fails
+
 ```bash
 # Check MySQL is running
 mysql -u root -p -e "SELECT 1"
@@ -275,6 +291,7 @@ ls backend_server/init.sql
 ```
 
 ### CORS errors
+
 - Ensure backend is running on port 5000
 - Check that frontend makes requests to `http://localhost:5000`
 - CORS is configured in `backend_server/server.js`
@@ -282,6 +299,7 @@ ls backend_server/init.sql
 ## 📦 Deployment
 
 For production deployment instructions, see [HƯỚNG_DẪN_TRIỂN_KHAI.md](./HƯỚNG_DẪN_TRIỂN_KHAI.md) (Vietnamese guide includes):
+
 - PM2 process management
 - Nginx reverse proxy configuration
 - SSL/HTTPS setup with Certbot
@@ -292,6 +310,7 @@ For production deployment instructions, see [HƯỚNG_DẪN_TRIỂN_KHAI.md](./H
 ## 🤝 Contributing
 
 Contributions are welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your changes (`git commit -m 'Add AmazingFeature'`)
@@ -310,6 +329,7 @@ This project is open source and available under the MIT License.
 ## 📞 Support
 
 For issues, questions, or suggestions:
+
 1. Check the [troubleshooting section](#-troubleshooting)
 2. Review the [API documentation](./backend_server/README.md)
 3. Open an issue on GitHub

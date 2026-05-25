@@ -1,11 +1,11 @@
 # NotificationHub Backend API
 
-Complete backend server for NotificationHub application with support for multi-platform notification management (Outlook, Slack, Teams, Discord).
+Complete backend server for NotificationHub application with support for multi-platform notification management (Outlook, Slack, Teams, Discord, Zalo).
 
 ## Features Implemented
 
 ✅ **Pagination & Infinite Scroll** - Configurable page size (1-50 items) with pagination metadata
-✅ **Data Normalization** - Standardize notifications from different platforms (Outlook, Slack, Teams, Discord)
+✅ **Data Normalization** - Standardize notifications from different platforms (Outlook, Slack, Teams, Discord, Zalo)
 ✅ **Response JSON Design** - Clean, structured API responses with formatted timestamps
 ✅ **Timestamp Formatting** - User-friendly time display ("5 phút trước", "Hôm qua lúc 16:20")
 ✅ **Data Cleanup** - Remove redundant fields before returning to frontend
@@ -68,6 +68,37 @@ mysql -u root -p < init.sql
 # Or manually execute init.sql in your MySQL client
 ```
 
+### Slack Token Notes
+
+If you want to test Slack API calls directly from your terminal, load the backend `.env` into the current shell first so `SLACK_BOT_TOKEN` is available:
+
+```bash
+cd backend_server
+set -a
+source .env
+set +a
+curl -s "https://slack.com/api/users.info?user=U0B5PQ8NA83" \
+  -H "Authorization: Bearer $SLACK_BOT_TOKEN" | jq
+```
+
+The backend also syncs `SLACK_BOT_TOKEN` into `platform_tokens` automatically on startup, so the token is persisted for event handling and `users.info` lookups.
+
+### Backfill Slack Sender Names
+
+If older Slack notifications still show user IDs, backfill them after loading `.env`:
+
+```bash
+cd backend_server
+npm run backfill:slack-senders
+```
+
+To preview changes without updating the database:
+
+```bash
+cd backend_server
+npm run backfill:slack-senders -- --dry-run
+```
+
 ### 3. Start the Server
 
 ```bash
@@ -83,13 +114,14 @@ The server will start on `http://localhost:5000`
 ## API Endpoints
 
 ### Get Notifications with Pagination
+
 ```
 GET /api/notifications?page=1&limit=20&platform=all&status=all
 
 Query Parameters:
 - page: Page number (default: 1)
 - limit: Items per page (default: 20, max: 50)
-- platform: Filter by platform (all|teams|slack|outlook|discord)
+- platform: Filter by platform (all|teams|slack|outlook|discord|zalo)
 - status: Filter by status (all|read|unread)
 
 Response:
@@ -108,11 +140,13 @@ Response:
 ```
 
 ### Get Single Notification
+
 ```
 GET /api/notifications/:id
 ```
 
 ### Get Notifications Grouped by Date
+
 ```
 GET /api/notifications/grouped?platform=all&status=all
 
@@ -128,6 +162,7 @@ Response:
 ```
 
 ### Get Notification Statistics
+
 ```
 GET /api/notifications/stats
 
@@ -140,7 +175,8 @@ Response:
     "byPlatform": {
       "teams": 15,
       "slack": 20,
-      "outlook": 15
+      "outlook": 15,
+      "zalo": 5
     },
     "byStatus": {
       "unread": 12,
@@ -151,6 +187,7 @@ Response:
 ```
 
 ### Update Single Notification Read Status
+
 ```
 PUT /api/notifications/:id/read
 
@@ -161,6 +198,7 @@ Request Body:
 ```
 
 ### Update Multiple Notifications Read Status
+
 ```
 PUT /api/notifications/batch/read
 
@@ -172,11 +210,13 @@ Request Body:
 ```
 
 ### Delete Notification
+
 ```
 DELETE /api/notifications/:id
 ```
 
 ### Find and Remove Duplicates
+
 ```
 POST /api/notifications/deduplicate
 
@@ -185,6 +225,39 @@ Response:
   "success": true,
   "message": "Found and removed 2 duplicate notifications",
   "data": null
+}
+```
+
+### Ingest Notification From Platform
+
+```
+POST /api/notifications/ingest/:platform
+
+Supported platforms:
+- outlook
+- slack
+- teams
+- discord
+- zalo
+
+Request Body example:
+{
+  "sender": "Backend Team",
+  "subject": "API Deployment",
+  "message": "API notification-service đã deploy thành công.",
+  "timestamp": "2026-05-25T08:30:00Z",
+  "read": false
+}
+
+Slack-style webhook payload:
+{
+  "platform": "slack",
+  "data": {
+    "user": "Backend Team",
+    "channel": "#general",
+    "text": "Deploy completed",
+    "ts": 1716625800
+  }
 }
 ```
 
@@ -231,6 +304,7 @@ All successful responses follow this format:
 The system normalizes notifications from different platforms to a consistent format:
 
 ### Outlook Normalization
+
 - Maps `from` → `sender`
 - Maps `subject` → `subject`
 - Maps `bodyPreview` → `message`
@@ -238,6 +312,7 @@ The system normalizes notifications from different platforms to a consistent for
 - Maps `isRead` → `read`
 
 ### Slack Normalization
+
 - Maps `user` → `sender`
 - Maps `channel` → `subject`
 - Maps `text` → `message`
@@ -245,6 +320,7 @@ The system normalizes notifications from different platforms to a consistent for
 - Maps `read` → `read`
 
 ### Teams Normalization
+
 - Maps `from.displayName` → `sender`
 - Maps `subject` → `subject`
 - Maps `body.content` → `message`
@@ -252,11 +328,20 @@ The system normalizes notifications from different platforms to a consistent for
 - Maps `read` → `read`
 
 ### Discord Normalization
+
 - Maps `author.username` → `sender`
 - Maps `guild.name` → `subject`
 - Maps `content` → `message`
 - Maps `timestamp` → `timestamp`
 - Maps `read` → `read`
+
+### Zalo Normalization
+
+- Maps `sender.name` / `senderName` → `sender`
+- Maps `conversationName` / `threadName` → `subject`
+- Maps `message` / `text` / `content` → `message`
+- Maps `timestamp` / `createdAt` / `sentAt` → `timestamp`
+- Maps `read` / `isRead` → `read`
 
 ## Duplicate Detection Algorithm
 
@@ -267,12 +352,14 @@ The system uses a multi-level approach:
 3. **Threshold-based** - Configurable similarity threshold (default: 85%)
 
 Duplicates are detected when:
+
 - Same platform + same ID
 - Same sender (100% match) + similar message (85%+ similarity)
 
 ## Timestamp Formatting
 
 ### Relative Time Format
+
 - "Vừa xong" (< 1 minute ago)
 - "5 phút trước" (< 1 hour ago)
 - "2 giờ trước" (< 24 hours ago)
@@ -300,24 +387,26 @@ CREATE TABLE notifications (
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| DB_HOST | localhost | Database host |
-| DB_USER | root | Database user |
-| DB_PASSWORD | (empty) | Database password |
-| DB_NAME | notifyhub_db | Database name |
-| DB_PORT | 3306 | Database port |
-| PORT | 5000 | Server port |
-| NODE_ENV | development | Environment mode |
+| Variable    | Default      | Description       |
+| ----------- | ------------ | ----------------- |
+| DB_HOST     | localhost    | Database host     |
+| DB_USER     | root         | Database user     |
+| DB_PASSWORD | (empty)      | Database password |
+| DB_NAME     | notifyhub_db | Database name     |
+| DB_PORT     | 3306         | Database port     |
+| PORT        | 5000         | Server port       |
+| NODE_ENV    | development  | Environment mode  |
 
 ## Development
 
 ### Run Tests
+
 ```bash
 # Coming soon
 ```
 
 ### Code Style
+
 - ES6+ JavaScript
 - Comments in Vietnamese for consistency with the project
 - Modular architecture for scalability
@@ -332,6 +421,7 @@ CREATE TABLE notifications (
 ## Error Handling
 
 The API includes comprehensive error handling:
+
 - 400: Bad Request (invalid parameters)
 - 404: Not Found (resource doesn't exist)
 - 500: Internal Server Error (database/server issues)
@@ -341,7 +431,7 @@ All errors include descriptive messages and timestamps for debugging.
 ## Future Enhancements
 
 - [ ] Real-time notifications via WebSockets
-- [ ] Integration with actual platform APIs (Outlook Graph, Slack API, etc.)
+- [ ] Integration with actual platform APIs (Outlook Graph, Slack API, Zalo OA, etc.)
 - [ ] Notification scheduling and rules
 - [ ] Full-text search support
 - [ ] User authentication and authorization
