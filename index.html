@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Notification Hub</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
   <div class="layout">
@@ -59,6 +61,34 @@
     </div>
   </div>
 
+  <!-- DETAIL MODAL -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-box detail-modal-box">
+
+      <div class="modal-header">
+        <div>
+          <span id="detailBadge" class="badge">Teams</span>
+          <h3 id="detailSender">Người gửi</h3>
+        </div>
+
+        <button class="close-detail-btn" id="closeDetailModal">
+          ✕
+        </button>
+      </div>
+
+      <div class="modal-body detail-body">
+        <h4 id="detailSubject"></h4>
+
+        <p id="detailMessage"></p>
+
+        <div class="detail-meta">
+          <span id="detailTime"></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
   <script src="app.js"></script>
 </body>
+
 </html>

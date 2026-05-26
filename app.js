@@ -1,7 +1,7 @@
 /* =========================
    DATA INITIALIZATION
 ========================= */
-const API_BASE_URL = "http://localhost:5001/api";
+const API_BASE_URL = "http://localhost:5000/api";
 
 const apps = [
   { id: "teams", name: "Teams", color: "#6264a7", connected: true },
@@ -30,6 +30,14 @@ const appList = document.getElementById("appList");
 const appFilters = document.getElementById("appFilters");
 const notificationsContainer = document.getElementById("notificationsContainer");
 
+const detailModal = document.getElementById("detailModal");
+const closeDetailModal = document.getElementById("closeDetailModal");
+
+const detailBadge = document.getElementById("detailBadge");
+const detailSender = document.getElementById("detailSender");
+const detailSubject = document.getElementById("detailSubject");
+const detailMessage = document.getElementById("detailMessage");
+const detailTime = document.getElementById("detailTime");
 // Modal Elements
 const deleteModal = document.getElementById("deleteModal");
 const btnCancelDelete = document.getElementById("btnCancelDelete");
@@ -54,11 +62,11 @@ function renderApps() {
 
 function renderAppFilters() {
   let html = `<button class="app-filter-btn ${selectedApp === 'all' ? 'active' : ''}" data-app="all">Tất cả ứng dụng</button>`;
-  
+
   apps.filter(app => app.connected).forEach(app => {
     html += `<button class="app-filter-btn ${selectedApp === app.id ? 'active' : ''}" data-app="${app.id}">${app.name}</button>`;
   });
-  
+
   appFilters.innerHTML = html;
 }
 
@@ -81,6 +89,7 @@ function mapApiNotification(notification) {
     id: notification.id,
     app: notification.platform,
     sender,
+    subject: notification.subject || "",
     message,
     time,
     date,
@@ -154,11 +163,11 @@ function renderNotifications() {
 
     const cardsHtml = grouped[date].map(n => {
       const app = apps.find(a => a.id === n.app);
-        const displaySender = n.sender && n.sender !== n.subject ? n.sender : app.name;
-        const displayMessage = (n.message && n.message.trim() !== '' && n.message !== n.subject) ? n.message : (n.subject || '');
-        const displayTime = n.time || '';
+      const displaySender = n.sender && n.sender !== n.subject ? n.sender : app.name;
+      const displayMessage = (n.message && n.message.trim() !== '' && n.message !== n.subject) ? n.message : (n.subject || '');
+      const displayTime = n.time || '';
 
-        return `
+      return `
         <div class="card ${n.read ? '' : 'unread'}" data-id="${n.id}">
           <div class="card-header">
             <div class="sender-info">
@@ -188,6 +197,19 @@ function renderNotifications() {
   });
 }
 
+function openDetailModal(notification) {
+  const app = apps.find(a => a.id === notification.app);
+
+  detailBadge.innerText = app.name;
+  detailBadge.style.background = app.color;
+
+  detailSender.innerText = notification.sender || "Unknown";
+  detailSubject.innerText = notification.subject || "Không có tiêu đề";
+  detailMessage.innerText = notification.message || "";
+  detailTime.innerText = notification.time || "";
+
+  detailModal.classList.add("show");
+}
 /* =========================
    CENTRALIZED EVENT LISTENERS
 ========================= */
@@ -242,7 +264,7 @@ notificationsContainer.addEventListener("click", (e) => {
     e.stopPropagation();
     const id = menuBtn.dataset.id;
     const targetMenu = document.getElementById(`menu-${id}`);
-    
+
     document.querySelectorAll(".dropdown-menu").forEach(m => {
       if (m !== targetMenu) m.classList.remove("show");
     });
@@ -267,34 +289,34 @@ notificationsContainer.addEventListener("click", (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_read: newRead })
     })
-    .then(async resp => {
-      if (!resp.ok) {
-        const body = await resp.json().catch(()=>null);
-        throw new Error(body?.error?.message || `Update failed (${resp.status})`);
-      }
-    })
-    .catch(err => {
-      console.error('Failed to update read status:', err);
-      alert('Cập nhật trạng thái không thành công: ' + (err.message || err));
-      // revert optimistic change
-      const m = notifications.find(item => item.id === id);
-      if (m) { m.read = !newRead; renderNotifications(); }
-    })
-    .finally(() => {
-      // close dropdown menu after action
-      document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
-    });
+      .then(async resp => {
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => null);
+          throw new Error(body?.error?.message || `Update failed (${resp.status})`);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to update read status:', err);
+        alert('Cập nhật trạng thái không thành công: ' + (err.message || err));
+        // revert optimistic change
+        const m = notifications.find(item => item.id === id);
+        if (m) { m.read = !newRead; renderNotifications(); }
+      })
+      .finally(() => {
+        // close dropdown menu after action
+        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
+      });
     return;
   }
 
   // 3. Click Xóa thông báo -> Kích hoạt Custom Pop-up Modal công cụ xác nhận
   if (deleteBtn) {
     e.stopPropagation();
-    notificationIdToDelete = Number(deleteBtn.dataset.id); 
-    
+    notificationIdToDelete = Number(deleteBtn.dataset.id);
+
     // Đóng toàn bộ dropdown đang mở trước
     document.querySelectorAll(".dropdown-menu").forEach(m => m.classList.remove("show"));
-    
+
     // Hiển thị Custom Modal
     deleteModal.classList.add("show");
     return;
@@ -304,6 +326,10 @@ notificationsContainer.addEventListener("click", (e) => {
   if (card) {
     const id = Number(card.dataset.id);
     const n = notifications.find(item => item.id === id);
+
+
+    openDetailModal(n);
+
     if (n && !n.read) {
       const prev = n.read;
       n.read = true; // optimistic
@@ -314,19 +340,19 @@ notificationsContainer.addEventListener("click", (e) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_read: true })
       })
-      .then(async resp => {
-        if (!resp.ok) {
-          const body = await resp.json().catch(()=>null);
-          throw new Error(body?.error?.message || `Update failed (${resp.status})`);
-        }
-      })
-      .catch(err => {
-        console.error('Failed to mark as read:', err);
-        alert('Không thể đánh dấu là đã đọc: ' + (err.message || err));
-        // revert
-        n.read = prev;
-        renderNotifications();
-      });
+        .then(async resp => {
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => null);
+            throw new Error(body?.error?.message || `Update failed (${resp.status})`);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to mark as read:', err);
+          alert('Không thể đánh dấu là đã đọc: ' + (err.message || err));
+          // revert
+          n.read = prev;
+          renderNotifications();
+        });
     }
   }
 });
@@ -355,7 +381,7 @@ btnConfirmDelete.addEventListener("click", () => {
     fetch(`${API_BASE_URL}/notifications/${idToDelete}`, { method: 'DELETE' })
       .then(async resp => {
         if (!resp.ok) {
-          const body = await resp.json().catch(()=>null);
+          const body = await resp.json().catch(() => null);
           throw new Error(body?.error?.message || `Delete failed (${resp.status})`);
         }
 
@@ -383,6 +409,15 @@ deleteModal.addEventListener("click", (e) => {
   }
 });
 
+closeDetailModal.addEventListener("click", () => {
+  detailModal.classList.remove("show");
+});
+
+detailModal.addEventListener("click", (e) => {
+  if (e.target === detailModal) {
+    detailModal.classList.remove("show");
+  }
+});
 /* =========================
    INITIALIZATION
 ========================= */
