@@ -1,11 +1,11 @@
 # NotificationHub Backend API
 
-Complete backend server for NotificationHub application with support for multi-platform notification management (Outlook, Slack, Teams, Discord, Zalo).
+Complete backend server for NotificationHub application with support for multi-platform notification management (Outlook, Slack, Microsoft Teams, Discord, Zalo).
 
 ## Features Implemented
 
 ✅ **Pagination & Infinite Scroll** - Configurable page size (1-50 items) with pagination metadata
-✅ **Data Normalization** - Standardize notifications from different platforms (Outlook, Slack, Teams, Discord, Zalo)
+✅ **Data Normalization** - Standardize notifications from different platforms (Outlook, Slack, Microsoft Teams, Discord, Zalo)
 ✅ **Response JSON Design** - Clean, structured API responses with formatted timestamps
 ✅ **Timestamp Formatting** - User-friendly time display ("5 phút trước", "Hôm qua lúc 16:20")
 ✅ **Data Cleanup** - Remove redundant fields before returning to frontend
@@ -82,6 +82,43 @@ curl -s "https://slack.com/api/users.info?user=U0B5PQ8NA83" \
 ```
 
 The backend also syncs `SLACK_BOT_TOKEN` into `platform_tokens` automatically on startup, so the token is persisted for event handling and `users.info` lookups.
+
+### Microsoft Teams / Graph Setup
+
+Teams support now uses Microsoft Graph OAuth and subscriptions.
+
+Required environment variables:
+
+- `TEAMS_CLIENT_ID`
+- `TEAMS_CLIENT_SECRET`
+- `TEAMS_TENANT_ID` (default: `common`)
+- `TEAMS_REDIRECT_URI` (for example: `https://<your-ngrok-host>/api/platforms/teams/oauth/callback`)
+- `TEAMS_NOTIFICATION_URL` (for example: `https://<your-ngrok-host>/api/platforms/teams/webhook`)
+- `TEAMS_SCOPES` (default includes `offline_access`, `User.Read`, `Chat.Read`, `ChannelMessage.Read.All`, `Subscription.ReadWrite.All`)
+- `TEAMS_SUBSCRIPTION_RESOURCE` (optional; auto-create a subscription after OAuth callback if set)
+- `TEAMS_CLIENT_STATE` (optional shared secret for webhook verification)
+
+OAuth flow:
+
+```bash
+# Start login/consent in browser
+http://localhost:5001/api/platforms/teams/oauth/start
+```
+
+After consent, the callback stores the Graph token in `platform_tokens` and, if `TEAMS_SUBSCRIPTION_RESOURCE` plus `TEAMS_NOTIFICATION_URL` are configured, it auto-creates a Graph subscription.
+
+Manual subscription setup:
+
+```bash
+curl -X POST 'http://localhost:5001/api/platforms/teams/subscriptions' \
+  -H 'Content-Type: application/json' \
+  -d '{"resource":"/chats/getAllMessages","notificationUrl":"https://<your-ngrok-host>/api/platforms/teams/webhook"}'
+```
+
+Teams webhook validation:
+
+- `GET /api/platforms/teams/webhook?validationToken=...` returns the token as plain text
+- `POST /api/platforms/teams/webhook` receives Graph notifications and stores them in `notifications`
 
 ### Backfill Slack Sender Names
 
@@ -318,6 +355,29 @@ The system normalizes notifications from different platforms to a consistent for
 - Maps `text` → `message`
 - Converts `ts` (Unix timestamp) → ISO format
 - Maps `read` → `read`
+
+### Teams Webhook Ingestion
+
+Teams support is available via a webhook endpoint that accepts both Microsoft Graph validation and simple Teams-style payloads:
+
+- `GET /api/platforms/teams/webhook?validationToken=...` → returns the validation token as plain text
+- `POST /api/platforms/teams/webhook` → accepts a Teams / Graph notification payload and stores it in `notifications`
+
+Supported payload fields:
+
+- `from.displayName` → `sender`
+- `subject` → `subject`
+- `body.content` → `message`
+- `createdDateTime` / `timestamp` → `timestamp`
+- `read` / `isRead` → `read`
+
+Example request:
+
+```bash
+curl -X POST 'http://localhost:5001/api/platforms/teams/webhook' \
+  -H 'Content-Type: application/json' \
+  -d '{"from":{"displayName":"Project Lead"},"subject":"Sprint Review","body":{"content":"Teams integration check"},"createdDateTime":"2026-05-26T08:30:00.000Z"}'
+```
 
 ### Teams Normalization
 

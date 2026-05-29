@@ -38,6 +38,13 @@ try {
   // route file may not exist yet during initial setup
 }
 
+try {
+  const teamsRoutes = require('./routes/platforms/teams');
+  app.use('/api/platforms/teams', teamsRoutes);
+} catch (e) {
+  // route file may not exist yet during initial setup
+}
+
 // API info endpoint
 app.get('/api/info', (req, res) => {
   res.json({

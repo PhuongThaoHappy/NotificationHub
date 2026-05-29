@@ -31,6 +31,9 @@ function formatTimeAgo(timestamp) {
 
   const now = new Date();
   const diffMs = now - date;
+  if (diffMs <= 0) {
+    return 'Vừa xong';
+  }
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);
@@ -70,6 +73,9 @@ function formatDate(timestamp) {
 
   const now = new Date();
   const diffMs = now - date;
+  if (diffMs <= 0) {
+    return 'Hôm nay';
+  }
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) {
